@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>铁锈战争地图压缩</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #3fb950;
+      --accent-hover: #56d364;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.75rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .drop-zone {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(63, 185, 80, 0.06);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .drop-zone-text {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+    .drop-zone-text p {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin: 0;
+    }
+    .file-name {
+      margin-top: 0.75rem;
+      font-size: 0.875rem;
+      word-break: break-all;
+    }
+    .file-name span { color: var(--accent); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .stat {
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+    }
+    .stat-label { font-size: 0.75rem; color: var(--muted); }
+    .stat-value { font-size: 1.1rem; font-weight: 600; margin-top: 0.15rem; }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    button {
+      font: inherit;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.25rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--accent);
+      color: #0d1117;
+    }
+    .btn-primary:not(:disabled):hover { background: var(--accent-hover); }
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:not(:disabled):hover { background: #3d4f6a; }
+    .log-title {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+    }
+    #log {
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 0.78rem;
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 0.75rem;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #adbac7;
+    }
+    .error { color: var(--danger); }
+    footer {
+      margin-top: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>铁锈战争地图压缩</h1>
+    <p class="subtitle">适用于铁锈战争 1.15 · 本地处理，文件不会上传至服务器</p>
+
+    <div class="card">
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".tmx,.xml">
+        <div class="drop-zone-text">
+          <strong>点击或拖拽上传 .tmx 地图文件</strong>
+          <p>支持 Tiled 地图格式（.tmx / .xml）</p>
+        </div>
+      </div>
+      <div class="file-name" id="fileName"></div>
+
+      <div class="stats" id="stats" hidden>
+        <div class="stat">
+          <div class="stat-label">原始大小</div>
+          <div class="stat-value" id="origSize">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">压缩后大小</div>
+          <div class="stat-value" id="compSize">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">压缩率</div>
+          <div class="stat-value" id="ratio">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">节省</div>
+          <div class="stat-value" id="saved">—</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-primary" id="compressBtn" disabled>压缩地图</button>
+        <button class="btn-primary" id="downloadBtn" disabled>下载压缩后的 .tmx</button>
+        <button class="btn-secondary" id="resetBtn" disabled>重置</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="log-title">处理日志</div>
+      <div id="log">等待上传地图文件…</div>
+    </div>
+
+    <footer>author: wty-hub</footer>
+  </div>
+
+  <script>
+    const REFERENCE_PROPERTIES = [
+      "activatedBy",
+      "deactivatedBy",
+      "target",
+      "alsoActivate",
+      "whenActivatedIds",
+    ];
+    const REFERENCE_PROPERTY_SET = new Set(REFERENCE_PROPERTIES);
+
+    let sourceFile = null;
+    let sourceText = null;
+    let compressedBlob = null;
+    let compressedName = null;
+
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const fileNameEl = document.getElementById("fileName");
+    const logEl = document.getElementById("log");
+    const statsEl = document.getElementById("stats");
+    const compressBtn = document.getElementById("compressBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    function formatBytes(n) {
+      if (n < 1024) return n + " B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+      return (n / (1024 * 1024)).toFixed(2) + " MB";
+    }
+
+    function log(msg) {
+      if (logEl.textContent === "等待上传地图文件…") logEl.textContent = "";
+      logEl.textContent += msg + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function clearLog() {
+      logEl.textContent = "";
+      logEl.classList.remove("error");
+    }
+
+    function genMinimalStrings(n) {
+      const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+      const result = [];
+      let length = 1;
+      while (result.length < n) {
+        const combos = product(chars, length);
+        for (const combo of combos) {
+          result.push(combo.join(""));
+          if (result.length === n) break;
+        }
+        length++;
+      }
+      return result;
+    }
+
+    function* product(chars, length) {
+      const indices = new Array(length).fill(0);
+      const total = Math.pow(chars.length, length);
+      for (let i = 0; i < total; i++) {
+        let s = "";
+        for (let j = 0; j < length; j++) s += chars[indices[j]];
+        yield s.split("");
+        for (let j = length - 1; j >= 0; j--) {
+          indices[j]++;
+          if (indices[j] < chars.length) break;
+          indices[j] = 0;
+        }
+      }
+    }
+
+    function removeWhitespaceTextNodes(node) {
+      const children = [...node.childNodes];
+      for (const child of children) {
+        if (child.nodeType === Node.TEXT_NODE && !/\S/.test(child.nodeValue)) {
+          node.removeChild(child);
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          removeWhitespaceTextNodes(child);
+        }
+      }
+    }
+
+    function serializeXml(doc) {
+      removeWhitespaceTextNodes(doc.documentElement);
+      return new XMLSerializer()
+        .serializeToString(doc)
+        .replace(/^\s*<\?xml[^?]*\?>\s*/i, "");
+    }
+
+    function compressMap(xmlText) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, "application/xml");
+      const parseError = doc.querySelector("parsererror");
+      if (parseError) {
+        throw new Error("XML 解析失败：" + parseError.textContent.trim());
+      }
+
+      const root = doc.documentElement;
+      if (root.tagName !== "map") {
+        throw new Error("不是有效的 TMX 地图文件（根节点应为 map）");
+      }
+
+      const logs = [];
+
+      const imageNodes = root.querySelectorAll("tileset > image");
+      logs.push(`delete ${imageNodes.length} image nodes`);
+      imageNodes.forEach((n) => n.parentNode.removeChild(n));
+
+      const tilesets = root.querySelectorAll("tileset");
+      let tilesetNameDelCnt = 0;
+      tilesets.forEach((s) => {
+        if (s.hasAttribute("name")) {
+          s.removeAttribute("name");
+          tilesetNameDelCnt++;
+        }
+      });
+      logs.push(`delete ${tilesetNameDelCnt} tileset names`);
+
+      const unitObjectLayers = root.querySelectorAll('objectgroup[name="UnitObjects"]');
+      if (unitObjectLayers.length > 0) {
+        let unitobjectNameDelCnt = 0;
+        const unitobjects = unitObjectLayers[0].querySelectorAll("object");
+        unitobjects.forEach((o) => {
+          if (o.hasAttribute("name")) {
+            o.removeAttribute("name");
+            unitobjectNameDelCnt++;
+          }
+        });
+        logs.push(`delete ${unitobjectNameDelCnt} unitobject names`);
+      }
+
+      const triggerLayers = root.querySelectorAll('objectgroup[name="Triggers"]');
+      if (triggerLayers.length > 0) {
+        const triggerLayer = triggerLayers[0];
+        const triggerObjects = triggerLayer.querySelectorAll("object");
+        const triggerReferences = new Map();
+
+        let nameCount = 0;
+        let idCount = 0;
+
+        triggerObjects.forEach((o) => {
+          const objName = o.getAttribute("name");
+          if (objName && objName !== "map_info") {
+            triggerReferences.set(objName, 0);
+            nameCount++;
+          }
+          o.querySelectorAll('properties > property[name="id"]').forEach((idObj) => {
+            const val = idObj.getAttribute("value");
+            if (val !== null) {
+              triggerReferences.set(val, 0);
+              idCount++;
+            }
+          });
+        });
+
+        logs.push(`name_count: ${nameCount}, id_count: ${idCount}`);
+
+        let refCount = 0;
+        triggerObjects.forEach((o) => {
+          o.querySelectorAll("properties > property").forEach((p) => {
+            const propName = p.getAttribute("name");
+            if (REFERENCE_PROPERTY_SET.has(propName)) {
+              const val = p.getAttribute("value");
+              if (val !== null) {
+                triggerReferences.set(val, (triggerReferences.get(val) || 0) + 1);
+                refCount++;
+              }
+            }
+          });
+        });
+        logs.push(`ref count: ${refCount}`);
+
+        const sortedTriggerReferences = [...triggerReferences.entries()]
+          .filter(([, count]) => count !== 0)
+          .sort((a, b) => b[1] - a[1]);
+
+        const minimalNames = genMinimalStrings(sortedTriggerReferences.length);
+        const triggerSubstitudes = new Map();
+        sortedTriggerReferences.forEach(([key], i) => {
+          triggerSubstitudes.set(key, minimalNames[i]);
+        });
+
+        let substitudeCnt = 0;
+        let delCnt = 0;
+
+        triggerObjects.forEach((o) => {
+          const objName = o.getAttribute("name");
+          if (objName && objName !== "map_info") {
+            if (triggerSubstitudes.has(objName)) {
+              o.setAttribute("name", triggerSubstitudes.get(objName));
+              substitudeCnt++;
+            } else {
+              o.removeAttribute("name");
+              delCnt++;
+            }
+          }
+
+          const idProps = [...o.querySelectorAll('properties > property[name="id"]')];
+          idProps.forEach((idObj) => {
+            const val = idObj.getAttribute("value");
+            if (triggerSubstitudes.has(val)) {
+              idObj.setAttribute("value", triggerSubstitudes.get(val));
+              substitudeCnt++;
+            } else {
+              idObj.parentNode.removeChild(idObj);
+              delCnt++;
+            }
+          });
+
+          o.querySelectorAll("properties > property").forEach((p) => {
+            const propName = p.getAttribute("name");
+            if (REFERENCE_PROPERTY_SET.has(propName)) {
+              const val = p.getAttribute("value");
+              if (val !== null && triggerSubstitudes.has(val)) {
+                p.setAttribute("value", triggerSubstitudes.get(val));
+                substitudeCnt++;
+              }
+            }
+          });
+        });
+
+        logs.push(`substitude count: ${substitudeCnt}, del count: ${delCnt}`);
+      }
+
+      const output = serializeXml(doc);
+      return { output, logs };
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      const ext = file.name.split(".").pop().toLowerCase();
+      if (!["tmx", "xml"].includes(ext)) {
+        clearLog();
+        logEl.classList.add("error");
+        log("请选择 .tmx 或 .xml 文件");
+        return;
+      }
+
+      sourceFile = file;
+      compressedBlob = null;
+      compressedName = null;
+      downloadBtn.disabled = true;
+      compressBtn.disabled = false;
+      resetBtn.disabled = false;
+      statsEl.hidden = true;
+
+      fileNameEl.innerHTML = '已选择：<span>' + escapeHtml(file.name) + "</span> (" + formatBytes(file.size) + ")";
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        sourceText = reader.result;
+        clearLog();
+        log("文件已加载，点击「压缩地图」开始处理");
+      };
+      reader.onerror = () => {
+        clearLog();
+        logEl.classList.add("error");
+        log("文件读取失败");
+        compressBtn.disabled = true;
+      };
+      reader.readAsText(file, "UTF-8");
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function doCompress() {
+      if (!sourceText || !sourceFile) return;
+      clearLog();
+      compressBtn.disabled = true;
+
+      try {
+        const { output, logs } = compressMap(sourceText);
+        logs.forEach((line) => log(line));
+
+        compressedBlob = new Blob([output], { type: "application/xml;charset=utf-8" });
+        const base = sourceFile.name.replace(/\.(tmx|xml)$/i, "");
+        compressedName = base + "_compressed.tmx";
+
+        const origBytes = new TextEncoder().encode(sourceText).length;
+        const compBytes = new TextEncoder().encode(output).length;
+        const saved = origBytes - compBytes;
+        const ratio = origBytes > 0 ? ((1 - compBytes / origBytes) * 100).toFixed(1) : "0.0";
+
+        document.getElementById("origSize").textContent = formatBytes(origBytes);
+        document.getElementById("compSize").textContent = formatBytes(compBytes);
+        document.getElementById("ratio").textContent = ratio + "%";
+        document.getElementById("saved").textContent = formatBytes(Math.max(0, saved));
+        statsEl.hidden = false;
+
+        downloadBtn.disabled = false;
+        compressBtn.disabled = false;
+        log("\n压缩完成，可下载文件");
+      } catch (err) {
+        logEl.classList.add("error");
+        log("错误：" + err.message);
+        compressBtn.disabled = false;
+      }
+    }
+
+    function doDownload() {
+      if (!compressedBlob || !compressedName) return;
+      const url = URL.createObjectURL(compressedBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = compressedName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function doReset() {
+      sourceFile = null;
+      sourceText = null;
+      compressedBlob = null;
+      compressedName = null;
+      fileInput.value = "";
+      fileNameEl.textContent = "";
+      statsEl.hidden = true;
+      compressBtn.disabled = true;
+      downloadBtn.disabled = true;
+      resetBtn.disabled = true;
+      clearLog();
+      log("等待上传地图文件…");
+    }
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+    compressBtn.addEventListener("click", doCompress);
+    downloadBtn.addEventListener("click", doDownload);
+    resetBtn.addEventListener("click", doReset);
+  </script>
+</body>
+</html>
